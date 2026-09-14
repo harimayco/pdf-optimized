@@ -85,11 +85,11 @@ interface CompressionConfig {
 function getCompressionConfig(level: CompressionLevel): CompressionConfig {
   switch (level) {
     case 'extreme':
-      return { scale: 1.25, quality: 0.60 }; // ~90 DPI, heavy reduction for strict size limits
+      return { scale: 1.0, quality: 0.50 }; // ~72 DPI, heavy reduction for strict size limits
     case 'recommended':
-      return { scale: 2.08, quality: 0.82 }; // ~150 DPI, crisp text and clean images with balanced reduction
+      return { scale: 1.45, quality: 0.76 }; // ~105 DPI, clear visual balance for scanned/photo content
     case 'less':
-      return { scale: 2.5, quality: 0.90 }; // ~180-200 DPI, near-original high fidelity
+      return { scale: 1.85, quality: 0.84 }; // ~135 DPI, high resolution
     case 'none':
     default:
       return { scale: 1.0, quality: 1.0 };
@@ -199,6 +199,64 @@ function resolveOutputFileName(customName: string | undefined, defaultName: stri
   return defaultName;
 }
 
+// Helper to build a clean lossless vector document with rotation, resizing, and object stream compression
+async function buildVectorMergedDoc(
+  files: UploadedPdfFile[],
+  options: ProcessingOptions,
+  targetWidth: number,
+  targetHeight: number,
+  onProgress?: (percent: number, msg: string) => void
+): Promise<{ bytes: Uint8Array; totalPages: number }> {
+  const outputDoc = await PDFDocument.create();
+  let totalPagesCount = 0;
+
+  for (let fIdx = 0; fIdx < files.length; fIdx++) {
+    const fileItem = files[fIdx];
+    if (onProgress) {
+      onProgress(
+        10 + Math.floor((fIdx / files.length) * 35),
+        `Optimizing vector streams for ${fileItem.name}...`
+      );
+    }
+
+    const fileBytes = await fileItem.file.arrayBuffer();
+    const srcDoc = await PDFDocument.load(fileBytes);
+    const pageIndices = srcDoc.getPageIndices();
+    const copiedPages = await outputDoc.copyPages(srcDoc, pageIndices);
+
+    for (let pIdx = 0; pIdx < copiedPages.length; pIdx++) {
+      const page = copiedPages[pIdx];
+      totalPagesCount++;
+
+      // Apply rotation if any
+      if (fileItem.rotation) {
+        const currentRot = page.getRotation().angle;
+        page.setRotation(degrees((currentRot + fileItem.rotation) % 360));
+      }
+
+      // Apply resizing options
+      if (options.resizeSameSize) {
+        const originalPageWidth = page.getWidth();
+        const originalPageHeight = page.getHeight();
+
+        if (options.keepOriginalRatio) {
+          const scaleFactor = targetWidth / originalPageWidth;
+          page.scale(scaleFactor, scaleFactor);
+        } else {
+          const scaleX = targetWidth / originalPageWidth;
+          const scaleY = targetHeight / originalPageHeight;
+          page.scale(scaleX, scaleY);
+        }
+      }
+
+      outputDoc.addPage(page);
+    }
+  }
+
+  const bytes = await outputDoc.save({ useObjectStreams: true });
+  return { bytes, totalPages: totalPagesCount };
+}
+
 // Implementation for Merging into a Single Document
 async function processMergedFile(
   files: UploadedPdfFile[],
@@ -208,79 +266,29 @@ async function processMergedFile(
   originalTotalSize: number,
   onProgress: (prog: ProcessingProgress) => void
 ): Promise<CompressionResult> {
-  const outputDoc = await PDFDocument.create();
   const defaultFileName = files.length === 1 ? `compressed-${files[0].name}` : 'merged-compressed.pdf';
   const finalFileName = resolveOutputFileName(options.customOutputName, defaultFileName, '.pdf');
 
-  // If compression level is 'none' and no multi-page sheet layout is requested:
-  // we do fast lossless vector merging with optional page resizing
-  if (options.compressionLevel === 'none' && (!options.samePageMerge || options.samePageLayout === 'sequential')) {
-    let totalPagesCount = 0;
-
-    for (let fIdx = 0; fIdx < files.length; fIdx++) {
-      const fileItem = files[fIdx];
-      const progressBase = 10 + Math.floor((fIdx / files.length) * 75);
-
-      onProgress({
-        status: 'assembling',
-        percent: progressBase,
-        message: `Merging ${fileItem.name} (${fIdx + 1}/${files.length})...`,
-        currentFileIndex: fIdx + 1,
-        totalFiles: files.length,
-      });
-
-      const fileBytes = await fileItem.file.arrayBuffer();
-      const srcDoc = await PDFDocument.load(fileBytes);
-      const pageIndices = srcDoc.getPageIndices();
-
-      const copiedPages = await outputDoc.copyPages(srcDoc, pageIndices);
-
-      for (let pIdx = 0; pIdx < copiedPages.length; pIdx++) {
-        const page = copiedPages[pIdx];
-        totalPagesCount++;
-
-        // Apply rotation if any
-        if (fileItem.rotation) {
-          const currentRot = page.getRotation().angle;
-          page.setRotation(degrees((currentRot + fileItem.rotation) % 360));
-        }
-
-        // Apply resizing options
-        if (options.resizeSameSize) {
-          const originalPageWidth = page.getWidth();
-          const originalPageHeight = page.getHeight();
-
-          if (options.keepOriginalRatio) {
-            // Keep ratio: scale page to target width and scale height proportionally
-            const scaleFactor = targetWidth / originalPageWidth;
-            page.scale(scaleFactor, scaleFactor);
-          } else {
-            // Force fit to target width & target height
-            const scaleX = targetWidth / originalPageWidth;
-            const scaleY = targetHeight / originalPageHeight;
-            page.scale(scaleX, scaleY);
-          }
-        }
-
-        outputDoc.addPage(page);
-      }
-    }
-
+  // Build the lossless vector-optimized document first
+  const vectorResult = await buildVectorMergedDoc(files, options, targetWidth, targetHeight, (pct, msg) => {
     onProgress({
-      status: 'compressing',
-      percent: 90,
-      message: 'Generating final optimized PDF...',
+      status: 'assembling',
+      percent: pct,
+      message: msg,
     });
+  });
 
-    const compressedBytes = await outputDoc.save({ useObjectStreams: true });
-    const compressedBlob = new Blob([compressedBytes], { type: 'application/pdf' });
+  // If compression level is 'none' and no multi-page sheet layout is requested:
+  // return lossless vector document directly
+  if (options.compressionLevel === 'none' && (!options.samePageMerge || options.samePageLayout === 'sequential')) {
+    const compressedBlob = new Blob([vectorResult.bytes], { type: 'application/pdf' });
     const downloadUrl = URL.createObjectURL(compressedBlob);
     const savings = calculateSavings(originalTotalSize, compressedBlob.size);
 
     onProgress({
       status: 'completed',
       percent: 100,
-      message: 'Compression & merge complete!',
+      message: 'Lossless vector optimization complete!',
     });
 
     return {
@@ -290,11 +298,14 @@ async function processMergedFile(
       compressedTotalSize: compressedBlob.size,
       savedBytes: savings.savedBytes,
       savedPercentage: savings.savedPercentage,
-      totalPages: totalPagesCount,
+      totalPages: vectorResult.totalPages,
       blob: compressedBlob,
       downloadUrl,
+      optimizationNote: '100% lossless vector streams preserved.',
     };
   }
+
+  const outputDoc = await PDFDocument.create();
 
   // Compression with rasterization or same-page multi-up layouts
   const { scale, quality } = getCompressionConfig(options.compressionLevel);
@@ -466,14 +477,46 @@ async function processMergedFile(
 
   onProgress({
     status: 'compressing',
-    percent: 92,
-    message: 'Encoding compressed document...',
+    percent: 94,
+    message: 'Analyzing compression efficiency and finalizing...',
   });
 
-  const compressedBytes = await outputDoc.save({ useObjectStreams: true });
-  const compressedBlob = new Blob([compressedBytes], { type: 'application/pdf' });
-  const downloadUrl = URL.createObjectURL(compressedBlob);
-  const savings = calculateSavings(originalTotalSize, compressedBlob.size);
+  const rasterBytes = await outputDoc.save({ useObjectStreams: true });
+  const rasterSize = rasterBytes.byteLength;
+  const vectorSize = vectorResult.bytes.byteLength;
+
+  let finalBlob: Blob;
+  let finalTotalPages: number;
+  let optimizationNote: string;
+
+  // CRITICAL ANTI-BLOAT PROTECTION:
+  // A true compressor should NEVER return a file larger than the input!
+  // If a document is composed of vector text, converting it to raster JPEGs inflates size.
+  // We detect if rasterSize >= vectorSize or rasterSize >= originalTotalSize.
+  // When it does, we automatically preserve native vector streams:
+  // this keeps 100% razor-sharp text and prevents any file inflation!
+  const isMultiUp = options.samePageMerge && options.samePageLayout !== 'sequential';
+
+  if (!isMultiUp && (rasterSize >= vectorSize || rasterSize >= originalTotalSize)) {
+    if (files.length === 1 && originalTotalSize <= vectorSize && files[0].rotation === 0 && !options.resizeSameSize) {
+      finalBlob = files[0].file;
+      finalTotalPages = files[0].pageCount;
+      optimizationNote = 'Your PDF is already compact vector text. 100% native vector typography preserved without file inflation.';
+    } else {
+      finalBlob = new Blob([vectorResult.bytes], { type: 'application/pdf' });
+      finalTotalPages = vectorResult.totalPages;
+      optimizationNote = 'Original document has compact vector text. Native vector streams optimized to prevent pixelation and file inflation.';
+    }
+  } else {
+    finalBlob = new Blob([rasterBytes], { type: 'application/pdf' });
+    finalTotalPages = outputDoc.getPageCount();
+    optimizationNote = isMultiUp 
+      ? 'Multi-page sheet layout assembled successfully.' 
+      : 'Embedded images and photo scans compressed for maximum size reduction.';
+  }
+
+  const downloadUrl = URL.createObjectURL(finalBlob);
+  const savings = calculateSavings(originalTotalSize, finalBlob.size);
 
   onProgress({
     status: 'completed',
@@ -485,12 +528,13 @@ async function processMergedFile(
     isMerged: true,
     fileName: finalFileName,
     originalTotalSize,
-    compressedTotalSize: compressedBlob.size,
+    compressedTotalSize: finalBlob.size,
     savedBytes: savings.savedBytes,
     savedPercentage: savings.savedPercentage,
-    totalPages: outputDoc.getPageCount(),
-    blob: compressedBlob,
+    totalPages: finalTotalPages,
+    blob: finalBlob,
     downloadUrl,
+    optimizationNote,
   };
 }
 

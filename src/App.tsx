@@ -240,62 +240,37 @@ export default function App() {
             />
           </div>
         ) : (
-          /* View 3: Workspace with Uploaded Files, Reordering, and Options */
-          <div className="space-y-8 animate-in fade-in duration-200">
-            {/* Reorderable File List */}
-            <FileList
-              files={files}
-              onReorder={handleReorder}
-              onRemove={handleRemoveFile}
-              onRotate={handleRotateFile}
-              onAddMoreClick={() => fileInputRef.current?.click()}
-            />
+          /* View 3: Workspace with Uploaded Files on Left, Floating Settings on Right */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:items-start animate-in fade-in duration-200">
+            {/* Left Column: Reorderable File List & Dropzone */}
+            <div className="lg:col-span-7 xl:col-span-7 space-y-4">
+              <FileList
+                files={files}
+                onReorder={handleReorder}
+                onRemove={handleRemoveFile}
+                onRotate={handleRotateFile}
+                onAddMoreClick={() => fileInputRef.current?.click()}
+              />
 
-            {/* Dropzone compact strip */}
-            <Dropzone
-              isCompact
-              onFilesSelected={handleFilesSelected}
-              onLoadSamples={handleLoadSamples}
-              isLoadingSamples={isLoadingSamples}
-            />
+              {/* Dropzone compact strip */}
+              <Dropzone
+                isCompact
+                onFilesSelected={handleFilesSelected}
+                onLoadSamples={handleLoadSamples}
+                isLoadingSamples={isLoadingSamples}
+              />
+            </div>
 
-            {/* Options Panel */}
-            <CompressionOptions
-              options={options}
-              onChange={setOptions}
-              fileCount={files.length}
-              defaultOutputName={defaultOutputName}
-            />
-
-            {/* Sticky/Prominent Action Bottom Bar */}
-            <div 
-              id="action-bar-container"
-              className="clay-card-white p-6 flex flex-col sm:flex-row items-center justify-between gap-4 sticky bottom-4 shadow-2xl border-2 border-white/80"
-            >
-              <div className="text-center sm:text-left">
-                <p className="text-base font-black text-[#1E1B4B]">
-                  Ready to process {files.length} {files.length === 1 ? 'document' : 'documents'}
-                </p>
-                <p className="text-xs sm:text-sm font-semibold text-[#64748B]">
-                  Total Input Size: <span className="font-bold text-[#1E1B4B]">{formatBytes(totalOriginalSize)}</span> • 
-                  {' '}{options.mergeFiles ? 'Merge enabled' : 'Separate files'} • 
-                  {' '}<span className="capitalize">{options.compressionLevel}</span> compression
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <button
-                  id="start-process-btn"
-                  type="button"
-                  onClick={handleProcess}
-                  className="clay-btn-coral flex-1 sm:flex-none px-8 py-4 text-lg font-black flex items-center justify-center gap-3"
-                >
-                  <Zap className="w-5 h-5 fill-current" />
-                  <span>
-                    {options.mergeFiles ? 'Compress & Merge PDF' : 'Compress PDFs'}
-                  </span>
-                </button>
-              </div>
+            {/* Right Column: Floating Settings Panel & Compress Action */}
+            <div className="lg:col-span-5 xl:col-span-5 lg:sticky lg:top-6">
+              <CompressionOptions
+                options={options}
+                onChange={setOptions}
+                fileCount={files.length}
+                defaultOutputName={defaultOutputName}
+                totalOriginalSize={totalOriginalSize}
+                onProcess={handleProcess}
+              />
             </div>
           </div>
         )}

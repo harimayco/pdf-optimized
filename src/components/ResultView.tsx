@@ -82,9 +82,16 @@ export const ResultView: React.FC<ResultViewProps> = ({
         <h2 id="result-success-title" className="text-3xl sm:text-4xl font-black text-[#1E1B4B] mb-2 tracking-tight">
           PDF Successfully Compressed!
         </h2>
-        <p id="result-filename-label" className="text-base sm:text-lg font-bold text-[#64748B] mb-6">
+        <p id="result-filename-label" className="text-base sm:text-lg font-bold text-[#64748B] mb-4">
           {result.fileName} • {result.totalPages} {result.totalPages === 1 ? 'Page' : 'Total Pages'}
         </p>
+
+        {result.optimizationNote && (
+          <div id="result-optimization-note" className="max-w-2xl mx-auto mb-6 px-4 py-2.5 rounded-2xl bg-[#F0FDF4] border border-[#BBF7D0] text-xs sm:text-sm text-[#166534] font-semibold flex items-center justify-center gap-2 shadow-xs">
+            <Sparkles className="w-4 h-4 text-[#16A34A] shrink-0" />
+            <span>{result.optimizationNote}</span>
+          </div>
+        )}
 
         {/* STAT NUMBER CARDS (Following DESIGN.md formula exactly) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 my-8 max-w-4xl mx-auto">
@@ -127,7 +134,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
               {formatBytes(result.savedBytes)}
             </span>
             <span className="text-xs font-black px-3 py-1 rounded-full bg-[#34D399] text-white shadow-sm mt-2">
-              {result.savedPercentage > 0 ? `-${result.savedPercentage}% Smaller` : '100% Retained'}
+              {result.savedPercentage > 0 ? `-${result.savedPercentage}% Smaller` : 'Optimal Size (100% Quality)'}
             </span>
           </div>
         </div>

@@ -58,4 +58,5 @@ export interface CompressionResult {
   blob: Blob;
   downloadUrl: string;
   individualResults?: IndividualResult[];
+  optimizationNote?: string;
 }
