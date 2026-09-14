@@ -85,11 +85,11 @@ interface CompressionConfig {
 function getCompressionConfig(level: CompressionLevel): CompressionConfig {
   switch (level) {
     case 'extreme':
-      return { scale: 1.0, quality: 0.48 }; // ~72-96 DPI, heavy reduction
+      return { scale: 1.25, quality: 0.60 }; // ~90 DPI, heavy reduction for strict size limits
     case 'recommended':
-      return { scale: 1.35, quality: 0.68 }; // ~100-130 DPI, balanced
+      return { scale: 2.08, quality: 0.82 }; // ~150 DPI, crisp text and clean images with balanced reduction
     case 'less':
-      return { scale: 1.85, quality: 0.84 }; // ~140-180 DPI, high fidelity
+      return { scale: 2.5, quality: 0.90 }; // ~180-200 DPI, near-original high fidelity
     case 'none':
     default:
       return { scale: 1.0, quality: 1.0 };
@@ -112,6 +112,9 @@ async function renderPageToJpeg(
 
   const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) throw new Error('Could not get 2D canvas context');
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, canvas.width, canvas.height);

@@ -48,20 +48,20 @@ export const CompressionOptions: React.FC<CompressionOptionsProps> = ({
     {
       id: 'extreme',
       title: 'Extreme',
-      description: 'Maximum reduction, lower resolution. Best for email size limits.',
+      description: 'Maximum reduction, lower resolution. Best for strict email size limits.',
       clayColor: '#FB7185',
     },
     {
       id: 'recommended',
       title: 'Recommended',
-      description: 'Optimal balance of high compression & crisp visual quality.',
+      description: 'Sharp text & clear images without blurriness, retaining high clarity (~150 DPI).',
       badge: 'Default',
       clayColor: '#34D399',
     },
     {
       id: 'less',
       title: 'Less',
-      description: 'High resolution preserved with light compression.',
+      description: 'Near-original ultra high resolution with minimal compression (~180 DPI).',
       clayColor: '#60A5FA',
     },
     {
