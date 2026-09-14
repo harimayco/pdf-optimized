@@ -1,0 +1,6 @@
+{
+  "name": "Compress PDF - In-Browser PDF Compressor & Merger",
+  "description": "Compress and merge PDF files directly in your browser with drag-and-drop reordering, multiple compression levels, aspect ratio preservation, and tactile Claymorphism design.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
